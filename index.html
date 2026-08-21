@@ -1,0 +1,682 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inventario Técnico de TI ESU BUAP - Auditoría</title>
+  <!-- Tailwind CSS para diseño moderno -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería libre para escaneo QR/Códigos con cámara -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen font-sans">
+
+  <!-- Navbar -->
+  <header class="bg-slate-800 border-b border-slate-700 sticky top-0 z-30 px-6 py-4 shadow-lg flex flex-wrap justify-between items-center gap-4">
+    <div class="flex items-center gap-3">
+      <div class="p-2.5 bg-cyan-600 rounded-xl text-white shadow-md shadow-cyan-500/20">
+        <i class="fa-solid fa-server text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-xl font-bold tracking-wide text-white">Inventario Técnico de TI ESU BUAP</h1>
+        <div class="flex items-center gap-2">
+          <span id="syncStatus" class="inline-flex items-center gap-1 text-xs text-emerald-400">
+            <i class="fa-solid fa-circle text-[8px] animate-pulse"></i> Conectado a Sheets
+          </span>
+          <span class="text-xs text-slate-500">•</span>
+          <p class="text-xs text-slate-400">Sincronización en Tiempo Real</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="flex items-center gap-2 flex-wrap">
+      <button onclick="abrirModalNuevo()" class="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-md shadow-emerald-600/30">
+        <i class="fa-solid fa-plus"></i> <span>Nuevo Dispositivo</span>
+      </button>
+
+      <button onclick="cargarDatosNube()" class="bg-slate-700 hover:bg-slate-600 px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 border border-slate-600">
+        <i id="reloadIcon" class="fa-solid fa-arrows-rotate text-cyan-400"></i> <span class="hidden sm:inline">Recargar</span>
+      </button>
+
+      <button onclick="exportarCSV()" class="bg-cyan-600 hover:bg-cyan-500 px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-md shadow-cyan-600/30">
+        <i class="fa-solid fa-file-excel"></i> <span class="hidden sm:inline">Descargar Copia</span>
+      </button>
+
+      <button onclick="toggleScanner()" class="bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 shadow-md shadow-indigo-600/30">
+        <i class="fa-solid fa-qrcode"></i> <span>Escanear Código / QR</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Modal Scanner Cámara (QR y Barras) -->
+    <div id="scannerModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+      <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+        <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+          <h3 class="font-semibold text-lg flex items-center gap-2"><i class="fa-solid fa-camera text-emerald-400"></i> Escáner de Activo</h3>
+          <button onclick="cerrarScanner()" class="text-slate-400 hover:text-white text-xl">&times;</button>
+        </div>
+        <div id="qr-reader" class="w-full rounded-xl overflow-hidden bg-black"></div>
+        <p class="text-xs text-center text-slate-400">Apunta la cámara al código de barras o QR de la etiqueta.</p>
+      </div>
+    </div>
+
+    <!-- Tarjetas Métricas KPI -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-slate-800/80 border border-slate-700/60 p-4 rounded-xl">
+        <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+          <span>Total Equipos</span>
+          <i class="fa-solid fa-desktop text-cyan-400 text-base"></i>
+        </div>
+        <div id="totalEquipos" class="text-2xl font-bold mt-2 text-white">0</div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/60 p-4 rounded-xl">
+        <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+          <span>Asignados</span>
+          <i class="fa-solid fa-user-check text-emerald-400 text-base"></i>
+        </div>
+        <div id="totalAsignados" class="text-2xl font-bold mt-2 text-white">0</div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/60 p-4 rounded-xl">
+        <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+          <span>Win 10 / 11</span>
+          <i class="fa-brands fa-windows text-blue-400 text-base"></i>
+        </div>
+        <div id="totalModernos" class="text-2xl font-bold mt-2 text-white">0</div>
+      </div>
+
+      <div class="bg-slate-800/80 border border-slate-700/60 p-4 rounded-xl">
+        <div class="flex justify-between items-center text-slate-400 text-xs font-semibold uppercase tracking-wider">
+          <span>Win 7 / Legacy</span>
+          <i class="fa-solid fa-triangle-exclamation text-amber-400 text-base"></i>
+        </div>
+        <div id="totalLegacy" class="text-2xl font-bold mt-2 text-white">0</div>
+      </div>
+    </div>
+
+    <!-- Buscador y Filtros -->
+    <div class="bg-slate-800/80 border border-slate-700 p-4 rounded-xl flex flex-wrap gap-3 items-center justify-between">
+      <div class="relative flex-1 min-w-[260px]">
+        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-3 text-slate-400"></i>
+        <input type="text" id="buscadorInput" oninput="filtrarTabla()" placeholder="Buscar por ID QR / Código (9 dígitos), Serial, Hostname o Usuario..." 
+               class="w-full bg-slate-900 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+      </div>
+
+      <div class="flex items-center gap-2">
+        <select id="filtroArea" onchange="filtrarTabla()" class="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-cyan-500">
+          <option value="">Todas las Áreas</option>
+        </select>
+        <button onclick="limpiarFiltros()" class="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 rounded-lg text-slate-300 transition">Limpiar</button>
+      </div>
+    </div>
+
+    <!-- Notificación Flotante -->
+    <div id="toastNotification" class="hidden fixed bottom-5 right-5 z-50 bg-slate-800 border border-emerald-500 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm transition-all duration-300">
+      <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 text-lg"></i>
+      <span id="toastMsg">Cambios guardados en Sheets</span>
+    </div>
+
+    <!-- Tabla Principal -->
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-xs border-collapse">
+          <thead class="bg-slate-900/90 text-slate-300 font-semibold border-b border-slate-700 sticky top-0">
+            <tr>
+              <th class="p-3.5 whitespace-nowrap">Asset Tag (ID / QR)</th>
+              <th class="p-3.5 whitespace-nowrap">Usuario Asignado</th>
+              <th class="p-3.5 whitespace-nowrap">Área / Depto</th>
+              <th class="p-3.5 whitespace-nowrap">Ubicación</th>
+              <th class="p-3.5 whitespace-nowrap">Hostname</th>
+              <th class="p-3.5 whitespace-nowrap">S/N BIOS</th>
+              <th class="p-3.5 whitespace-nowrap">Hardware Principal</th>
+              <th class="p-3.5 whitespace-nowrap">S.O.</th>
+              <th class="p-3.5 whitespace-nowrap">Red (IP / MAC)</th>
+              <th class="p-3.5 text-center whitespace-nowrap">Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="cuerpoTabla" class="divide-y divide-slate-700/60 text-slate-300 font-normal">
+            <!-- Filas dinámicas -->
+          </tbody>
+        </table>
+      </div>
+      <div id="sinResultados" class="hidden p-8 text-center text-slate-400">
+        <i class="fa-solid fa-box-open text-3xl mb-2 text-slate-500"></i>
+        <p>No se encontraron registros que coincidan con la búsqueda.</p>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Modal de Edición Rápida -->
+  <div id="editModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="font-semibold text-base text-white flex items-center gap-2"><i class="fa-solid fa-pen-to-square text-cyan-400"></i> Editar Asignación de Activo</h3>
+        <button onclick="cerrarModalEdicion()" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+      
+      <form id="editForm" onsubmit="guardarEdicion(event)" class="space-y-3 text-xs">
+        <input type="hidden" id="editIndex">
+        
+        <div>
+          <label class="block text-slate-400 mb-1">Asset Tag (ID QR / Código 9 dígitos)</label>
+          <input type="text" id="modalAssetTag" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono text-sm focus:border-cyan-500">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Usuario Asignado</label>
+            <input type="text" id="modalUsuario" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Área / Departamento</label>
+            <input type="text" id="modalArea" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-slate-400 mb-1">Ubicación Física</label>
+          <input type="text" id="modalUbicacion" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+        </div>
+
+        <div class="p-3 bg-slate-900/60 rounded-lg border border-slate-700 text-slate-400 space-y-1">
+          <p><strong class="text-slate-300">Hostname:</strong> <span id="modalHost"></span></p>
+          <p><strong class="text-slate-300">Serial BIOS:</strong> <span id="modalSerial"></span></p>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-700">
+          <button type="button" onclick="cerrarModalEdicion()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white">Cancelar</button>
+          <button type="submit" id="btnGuardarModal" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white font-medium flex items-center gap-2">
+            <span>Guardar en Sheets</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Nuevo Dispositivo -->
+  <div id="nuevoModal" class="hidden fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-center border-b border-slate-700 pb-3">
+        <h3 class="font-semibold text-base text-white flex items-center gap-2"><i class="fa-solid fa-plus-circle text-emerald-400"></i> Registrar Nuevo Dispositivo</h3>
+        <button onclick="cerrarModalNuevo()" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+      
+      <form id="nuevoForm" onsubmit="guardarNuevoDispositivo(event)" class="space-y-3 text-xs">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1 font-semibold">Hostname <span class="text-rose-400">*</span></label>
+            <input type="text" id="nuevoHostname" required placeholder="Ej. PC-FIN-01" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Asset Tag (ID / QR)</label>
+            <input type="text" id="nuevoAssetTag" placeholder="Ej. 100234567" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Usuario Asignado</label>
+            <input type="text" id="nuevoUsuario" placeholder="Nombre completo" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Área / Departamento</label>
+            <input type="text" id="nuevoArea" placeholder="Ej. Administración, Laboratorio" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Ubicación Física</label>
+            <input type="text" id="nuevoUbicacion" placeholder="Ej. Edificio A, Piso 2" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Número de Serie (S/N BIOS)</label>
+            <input type="text" id="nuevoSerial" placeholder="Serial de fábrica" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-slate-400 mb-1">Fabricante / Modelo</label>
+            <input type="text" id="nuevoFabricante" placeholder="Ej. Dell OptiPlex" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">CPU / RAM</label>
+            <input type="text" id="nuevoHardware" placeholder="Ej. Core i5, 16GB" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Sistema Operativo</label>
+            <input type="text" id="nuevoSO" placeholder="Ej. Windows 11 Pro" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white focus:border-cyan-500">
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-700">
+          <button type="button" onclick="cerrarModalNuevo()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white">Cancelar</button>
+          <button type="submit" id="btnGuardarNuevo" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-white font-medium flex items-center gap-2">
+            <span>Registrar Dispositivo</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // URL conectada a tu Google Apps Script
+    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyl3vUXjmYDw8Gq-VPifPX5qGQurXhJ2GrfxFJVmjwLkjY46Fh2oWl0hc3RtdWUBI63/exec";
+
+    // Variables globales
+    let inventario = [];
+    let qrScanner = null;
+
+    const CABECERAS = [
+      "Asset_Tag_QR_Foto","Numero_Serie_Foto","Usuario_Asignado","Area_Departamento","Ubicacion_Fisica",
+      "Hostname","Numero_Serie_BIOS","Tipo_Equipo","Fabricante","Modelo","CPU","RAM_GB","Almacenamiento",
+      "Direccion_MAC","Direccion_IP_VLAN","Sistema_Operativo","SO_Build","Estado_Cifrado","Antivirus_EDR",
+      "Software_Instalado","Perifericos_Conectados","Usuario_Sesion_Actual","Estado_Operativo","Fecha_Auditoria",
+      "Proveedor_NumFactura","Fecha_Compra","Vencimiento_Garantia"
+    ];
+
+    // Cargar automáticamente al abrir la página
+    window.addEventListener('DOMContentLoaded', () => {
+      const cache = localStorage.getItem('inventario_ti_data');
+      if (cache) {
+        try {
+          inventario = JSON.parse(cache);
+          actualizarUI();
+        } catch(e) {}
+      }
+      cargarDatosNube();
+    });
+
+    // Leer datos desde Google Sheets vía Apps Script
+    async function cargarDatosNube() {
+      const icon = document.getElementById('reloadIcon');
+      if (icon) icon.classList.add('fa-spin');
+      document.getElementById('syncStatus').innerHTML = '<i class="fa-solid fa-spinner fa-spin text-[8px]"></i> Sincronizando...';
+
+      try {
+        const resp = await fetch(APPS_SCRIPT_URL, { method: 'GET', redirect: 'follow' });
+        const data = await resp.json();
+        if (Array.isArray(data) && data.length > 0) {
+          inventario = data;
+          localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
+          actualizarUI();
+          mostrarToast("Inventario sincronizado con Google Sheets", "success");
+        }
+      } catch (err) {
+        console.error("Error al sincronizar con Sheets:", err);
+        mostrarToast("No se pudo conectar a Sheets. Mostrando datos locales.", "error");
+      } finally {
+        if (icon) icon.classList.remove('fa-spin');
+        document.getElementById('syncStatus').innerHTML = '<i class="fa-solid fa-circle text-[8px] animate-pulse"></i> Conectado a Sheets';
+      }
+    }
+
+    function actualizarUI() {
+      actualizarKPIs();
+      poblarFiltroAreas();
+      filtrarTabla();
+    }
+
+    function actualizarKPIs() {
+      document.getElementById('totalEquipos').innerText = inventario.length;
+      document.getElementById('totalAsignados').innerText = inventario.filter(x => x.Usuario_Asignado && String(x.Usuario_Asignado).trim() !== '').length;
+      document.getElementById('totalModernos').innerText = inventario.filter(x => String(x.Sistema_Operativo || '').includes('10') || String(x.Sistema_Operativo || '').includes('11')).length;
+      document.getElementById('totalLegacy').innerText = inventario.filter(x => String(x.Sistema_Operativo || '').includes('7') || String(x.Sistema_Operativo || '').includes('8')).length;
+    }
+
+    function poblarFiltroAreas() {
+      const select = document.getElementById('filtroArea');
+      const actual = select.value;
+      const areas = [...new Set(inventario.map(x => x.Area_Departamento).filter(Boolean))].sort();
+      
+      select.innerHTML = '<option value="">Todas las Áreas</option>';
+      areas.forEach(a => {
+        const opt = document.createElement('option');
+        opt.value = a;
+        opt.innerText = a;
+        if (a === actual) opt.selected = true;
+        select.appendChild(opt);
+      });
+    }
+
+    function filtrarTabla() {
+      const texto = document.getElementById('buscadorInput').value.toLowerCase().trim();
+      const area = document.getElementById('filtroArea').value;
+      const cuerpo = document.getElementById('cuerpoTabla');
+      cuerpo.innerHTML = '';
+
+      const filtrados = inventario.filter((item, idx) => {
+        item._originalIndex = idx;
+        const matchTexto = (
+          String(item.Asset_Tag_QR_Foto || '').toLowerCase().includes(texto) ||
+          String(item.Numero_Serie_BIOS || '').toLowerCase().includes(texto) ||
+          String(item.Hostname || '').toLowerCase().includes(texto) ||
+          String(item.Usuario_Asignado || '').toLowerCase().includes(texto) ||
+          String(item.Area_Departamento || '').toLowerCase().includes(texto)
+        );
+        const matchArea = area === '' || item.Area_Departamento === area;
+        return matchTexto && matchArea;
+      });
+
+      if (filtrados.length === 0) {
+        document.getElementById('sinResultados').classList.remove('hidden');
+      } else {
+        document.getElementById('sinResultados').classList.add('hidden');
+      }
+
+      filtrados.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-700/40 transition group";
+
+        const badgeSO = String(item.Sistema_Operativo || '').includes('7') 
+          ? `<span class="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">${item.Sistema_Operativo || 'N/D'}</span>`
+          : `<span class="px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">${item.Sistema_Operativo || 'N/D'}</span>`;
+
+        tr.innerHTML = `
+          <td class="p-3.5 font-mono font-semibold text-cyan-300">${item.Asset_Tag_QR_Foto || '<span class="text-slate-500 font-sans italic">Sin asignar</span>'}</td>
+          <td class="p-3.5 font-medium text-white">${item.Usuario_Asignado || '<span class="text-slate-500 italic">No asignado</span>'}</td>
+          <td class="p-3.5">${item.Area_Departamento || '-'}</td>
+          <td class="p-3.5 text-slate-400">${item.Ubicacion_Fisica || '-'}</td>
+          <td class="p-3.5 font-mono text-slate-200">${item.Hostname || '-'}</td>
+          <td class="p-3.5 font-mono text-slate-400">${item.Numero_Serie_BIOS || '-'}</td>
+          <td class="p-3.5 text-slate-300">
+            <div>${item.Fabricante || ''} ${item.Modelo || ''}</div>
+            <div class="text-[11px] text-slate-400">${item.CPU || ''} • ${item.RAM_GB || ''}</div>
+          </td>
+          <td class="p-3.5">${badgeSO}</td>
+          <td class="p-3.5 font-mono text-[11px] text-slate-400">
+            <div>${item.Direccion_IP_VLAN || '-'}</div>
+            <div class="text-slate-500">${item.Direccion_MAC || '-'}</div>
+          </td>
+          <td class="p-3.5 text-center">
+            <div class="flex items-center justify-center gap-1.5">
+              <button onclick="abrirModalEdicion(${item._originalIndex})" title="Editar" class="p-2 bg-slate-700 hover:bg-cyan-600 rounded-lg text-slate-200 hover:text-white transition">
+                <i class="fa-solid fa-pen"></i>
+              </button>
+              <button onclick="eliminarDispositivo(${item._originalIndex})" title="Dar de baja / Eliminar" class="p-2 bg-slate-700 hover:bg-rose-600 rounded-lg text-slate-300 hover:text-white transition">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </td>
+        `;
+        cuerpo.appendChild(tr);
+      });
+    }
+
+    function limpiarFiltros() {
+      document.getElementById('buscadorInput').value = '';
+      document.getElementById('filtroArea').value = '';
+      filtrarTabla();
+    }
+
+    // Modal de Edición
+    function abrirModalEdicion(index) {
+      const item = inventario[index];
+      document.getElementById('editIndex').value = index;
+      document.getElementById('modalAssetTag').value = item.Asset_Tag_QR_Foto || '';
+      document.getElementById('modalUsuario').value = item.Usuario_Asignado || '';
+      document.getElementById('modalArea').value = item.Area_Departamento || '';
+      document.getElementById('modalUbicacion').value = item.Ubicacion_Fisica || '';
+      document.getElementById('modalHost').innerText = item.Hostname || 'N/A';
+      document.getElementById('modalSerial').innerText = item.Numero_Serie_BIOS || 'N/A';
+      
+      document.getElementById('editModal').classList.remove('hidden');
+    }
+
+    function cerrarModalEdicion() {
+      document.getElementById('editModal').classList.add('hidden');
+    }
+
+    // Modales de Nuevo Dispositivo
+    function abrirModalNuevo() {
+      document.getElementById('nuevoForm').reset();
+      document.getElementById('nuevoModal').classList.remove('hidden');
+    }
+
+    function cerrarModalNuevo() {
+      document.getElementById('nuevoModal').classList.add('hidden');
+    }
+
+    // Guardar Edición en Google Sheets
+    async function guardarEdicion(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnGuardarModal');
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando en Sheets...';
+      btn.disabled = true;
+
+      const index = document.getElementById('editIndex').value;
+      const asset = document.getElementById('modalAssetTag').value.trim();
+      const usuario = document.getElementById('modalUsuario').value.trim();
+      const area = document.getElementById('modalArea').value.trim();
+      const ubicacion = document.getElementById('modalUbicacion').value.trim();
+      const hostname = inventario[index].Hostname;
+
+      inventario[index].Asset_Tag_QR_Foto = asset;
+      inventario[index].Usuario_Asignado = usuario;
+      inventario[index].Area_Departamento = area;
+      inventario[index].Ubicacion_Fisica = ubicacion;
+      localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
+      actualizarUI();
+
+      const queryParams = new URLSearchParams({
+        action: 'update',
+        Hostname: hostname,
+        Asset_Tag_QR_Foto: asset,
+        Usuario_Asignado: usuario,
+        Area_Departamento: area,
+        Ubicacion_Fisica: ubicacion
+      });
+
+      const urlDestino = `${APPS_SCRIPT_URL}?${queryParams.toString()}`;
+
+      try {
+        const resp = await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
+        const resultado = await resp.json();
+
+        if (resultado.status === "success") {
+          mostrarToast(`Guardado en fila ${resultado.row} de Sheets`, "success");
+        } else {
+          mostrarToast("Guardado local. No se encontró en Sheets.", "error");
+        }
+      } catch (err) {
+        const img = new Image();
+        img.src = urlDestino;
+        mostrarToast("Cambios enviados a Google Sheets", "success");
+      }
+
+      btn.innerHTML = '<span>Guardar en Sheets</span>';
+      btn.disabled = false;
+      cerrarModalEdicion();
+    }
+
+    // Guardar Nuevo Dispositivo en Google Sheets
+    async function guardarNuevoDispositivo(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btnGuardarNuevo');
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando en Sheets...';
+      btn.disabled = true;
+
+      const nuevoItem = {
+        Hostname: document.getElementById('nuevoHostname').value.trim(),
+        Asset_Tag_QR_Foto: document.getElementById('nuevoAssetTag').value.trim(),
+        Usuario_Asignado: document.getElementById('nuevoUsuario').value.trim(),
+        Area_Departamento: document.getElementById('nuevoArea').value.trim(),
+        Ubicacion_Fisica: document.getElementById('nuevoUbicacion').value.trim(),
+        Numero_Serie_BIOS: document.getElementById('nuevoSerial').value.trim(),
+        Fabricante: document.getElementById('nuevoFabricante').value.trim(),
+        CPU: document.getElementById('nuevoHardware').value.trim(),
+        Sistema_Operativo: document.getElementById('nuevoSO').value.trim()
+      };
+
+      inventario.unshift(nuevoItem);
+      localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
+      actualizarUI();
+
+      const queryParams = new URLSearchParams({
+        action: 'create',
+        Hostname: nuevoItem.Hostname,
+        Asset_Tag_QR_Foto: nuevoItem.Asset_Tag_QR_Foto,
+        Usuario_Asignado: nuevoItem.Usuario_Asignado,
+        Area_Departamento: nuevoItem.Area_Departamento,
+        Ubicacion_Fisica: nuevoItem.Ubicacion_Fisica,
+        Numero_Serie_BIOS: nuevoItem.Numero_Serie_BIOS,
+        Fabricante: nuevoItem.Fabricante,
+        CPU: nuevoItem.CPU,
+        Sistema_Operativo: nuevoItem.Sistema_Operativo
+      });
+
+      const urlDestino = `${APPS_SCRIPT_URL}?${queryParams.toString()}`;
+
+      try {
+        await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
+        mostrarToast("Nuevo dispositivo agregado a Google Sheets", "success");
+      } catch (err) {
+        const img = new Image();
+        img.src = urlDestino;
+        mostrarToast("Dispositivo enviado a Google Sheets", "success");
+      }
+
+      btn.innerHTML = '<span>Registrar Dispositivo</span>';
+      btn.disabled = false;
+      cerrarModalNuevo();
+    }
+
+    // Dar de baja / Eliminar Dispositivo
+    async function eliminarDispositivo(index) {
+      const item = inventario[index];
+      const host = item.Hostname || "Sin Hostname";
+      
+      const confirmar = confirm(`¿Estás seguro de dar de baja y eliminar el dispositivo "${host}"?\n\nEsta acción eliminará la fila directamente de Google Sheets.`);
+      if (!confirmar) return;
+
+      // 1. Eliminar localmente
+      inventario.splice(index, 1);
+      localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
+      actualizarUI();
+
+      // 2. Eliminar fila en Google Sheets
+      const queryParams = new URLSearchParams({
+        action: 'delete',
+        Hostname: item.Hostname || "",
+        Asset_Tag_QR_Foto: item.Asset_Tag_QR_Foto || ""
+      });
+
+      const urlDestino = `${APPS_SCRIPT_URL}?${queryParams.toString()}`;
+
+      try {
+        await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
+        mostrarToast(`Dispositivo "${host}" eliminado de Sheets`, "success");
+      } catch (err) {
+        const img = new Image();
+        img.src = urlDestino;
+        mostrarToast(`Dispositivo "${host}" eliminado`, "success");
+      }
+    }
+
+    // Escáner de Códigos de Barras y QR con la Cámara
+    function toggleScanner() {
+      const modal = document.getElementById('scannerModal');
+      modal.classList.remove('hidden');
+
+      if (!qrScanner) {
+        qrScanner = new Html5Qrcode("qr-reader");
+      }
+
+      const config = { 
+        fps: 15, 
+        qrbox: { width: 280, height: 180 },
+        aspectRatio: 1.0
+      };
+
+      qrScanner.start({ facingMode: "environment" }, config, (decodedText) => {
+        const codigoLimpio = decodedText.trim().replace(/[\r\n\t]/g, '');
+        
+        cerrarScanner();
+        document.getElementById('buscadorInput').value = codigoLimpio;
+        filtrarTabla();
+
+        const itemEncontrado = inventario.findIndex(x => 
+          (x.Asset_Tag_QR_Foto && String(x.Asset_Tag_QR_Foto).toLowerCase() === codigoLimpio.toLowerCase()) ||
+          (x.Numero_Serie_BIOS && String(x.Numero_Serie_BIOS).toLowerCase() === codigoLimpio.toLowerCase())
+        );
+
+        if (itemEncontrado !== -1) {
+          setTimeout(() => abrirModalEdicion(itemEncontrado), 300);
+        } else {
+          mostrarToast(`Código detectado: ${codigoLimpio}`, "success");
+        }
+
+      }).catch(err => {
+        console.warn("Cámara no iniciada:", err);
+      });
+    }
+
+    function cerrarScanner() {
+      if (qrScanner) {
+        qrScanner.stop().then(() => {
+          document.getElementById('scannerModal').classList.add('hidden');
+        }).catch(() => {
+          document.getElementById('scannerModal').classList.add('hidden');
+        });
+      } else {
+        document.getElementById('scannerModal').classList.add('hidden');
+      }
+    }
+
+    // Toast de Notificaciones
+    function mostrarToast(msg, tipo = "success") {
+      const toast = document.getElementById('toastNotification');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+
+      toastMsg.innerText = msg;
+      if (tipo === "success") {
+        toast.className = "fixed bottom-5 right-5 z-50 bg-slate-800 border border-emerald-500 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm";
+        toastIcon.className = "fa-solid fa-circle-check text-emerald-400 text-lg";
+      } else {
+        toast.className = "fixed bottom-5 right-5 z-50 bg-slate-800 border border-red-500 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 text-sm";
+        toastIcon.className = "fa-solid fa-circle-xmark text-red-400 text-lg";
+      }
+
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3500);
+    }
+
+    // Exportar respaldo CSV
+    function exportarCSV() {
+      if (inventario.length === 0) {
+        alert("No hay registros para exportar.");
+        return;
+      }
+      let lineas = [];
+      lineas.push(CABECERAS.map(c => `"${c}"`).join(';'));
+
+      inventario.forEach(item => {
+        let fila = CABECERAS.map(key => {
+          let val = item[key] || "";
+          return `"${String(val).replace(/"/g, '""')}"`;
+        });
+        lineas.push(fila.join(';'));
+      });
+
+      const blob = new Blob(["\uFEFF" + lineas.join("\r\n")], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "INVENTARIO_TI_NUBE.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
