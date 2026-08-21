@@ -58,7 +58,7 @@
 
   <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
 
-    <!-- Modal Escáner Híbrido (OCR Dígitos + QR) -->
+    <!-- Modal Escáner Híbrido -->
     <div id="scannerModal" class="hidden fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4">
       <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
         <div class="flex justify-between items-center border-b border-slate-700 pb-3">
@@ -66,7 +66,6 @@
           <button onclick="cerrarScannerModal()" class="text-slate-400 hover:text-white text-xl">&times;</button>
         </div>
 
-        <!-- Selector de Modo -->
         <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-700 text-xs">
           <button id="btnModoOCR" onclick="cambiarModoEscaneo('ocr')" class="py-2 rounded-lg font-semibold bg-cyan-600 text-white transition flex items-center justify-center gap-1.5">
             <i class="fa-solid fa-font"></i> Leer Dígitos (OCR)
@@ -76,7 +75,6 @@
           </button>
         </div>
 
-        <!-- Contenedor Vista OCR -->
         <div id="contenedorOCR" class="space-y-3">
           <div class="relative w-full rounded-xl overflow-hidden bg-black aspect-video flex items-center justify-center">
             <video id="ocrVideo" autoplay playsinline class="w-full h-full object-cover"></video>
@@ -92,12 +90,10 @@
           <p id="ocrStatusMsg" class="text-[11px] text-center text-slate-400">Centra el número de 9 dígitos dentro del marco y presiona reconocer.</p>
         </div>
 
-        <!-- Contenedor Vista QR -->
         <div id="contenedorQR" class="hidden space-y-2">
           <div id="qr-reader" class="w-full rounded-xl overflow-hidden bg-black min-h-[240px]"></div>
           <p class="text-[11px] text-center text-slate-400">Apunta la cámara al cuadro QR de la etiqueta.</p>
         </div>
-
       </div>
     </div>
 
@@ -175,7 +171,7 @@
       <span id="toastMsg">Cambios guardados en Sheets</span>
     </div>
 
-    <!-- Tabla Dinámica -->
+    <!-- Tabla Principal -->
     <div class="bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden shadow-xl">
       <div class="overflow-x-auto">
         <table class="w-full text-left text-xs border-collapse">
@@ -441,7 +437,7 @@
     let modoEscaneoActual = 'ocr';
     let pestanaActual = 'general';
 
-    const CABECERAS = [
+    const CABECERAS_ESTANDAR = [
       "Asset_Tag_QR_Foto","Numero_Serie_Foto","Usuario_Asignado","Area_Departamento","Ubicacion_Fisica",
       "Hostname","Numero_Serie_BIOS","Tipo_Equipo","Fabricante","Modelo","CPU","RAM_GB","Almacenamiento",
       "Direccion_MAC","Direccion_IP_VLAN","Sistema_Operativo","SO_Build","Estado_Cifrado","Antivirus_EDR",
@@ -468,7 +464,7 @@
       try {
         const resp = await fetch(APPS_SCRIPT_URL, { method: 'GET', redirect: 'follow' });
         const data = await resp.json();
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           inventario = data;
           localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
           actualizarUI();
@@ -760,10 +756,12 @@
       const area = document.getElementById('modalArea').value.trim();
       const ubicacion = document.getElementById('modalUbicacion').value.trim();
       
-      const hostname = inventario[index].Hostname || "";
-      const serialBios = inventario[index].Numero_Serie_BIOS || "";
+      const item = inventario[index];
+      const hostname = item.Hostname || "";
+      const serialBios = item.Numero_Serie_BIOS || "";
+      const rowIndex = item._rowIndex || "";
 
-      // Actualización local en estado
+      // Actualizar estado local
       inventario[index].Asset_Tag_QR_Foto = asset;
       inventario[index].Usuario_Asignado = usuario;
       inventario[index].Area_Departamento = area;
@@ -771,9 +769,9 @@
       localStorage.setItem('inventario_ti_data', JSON.stringify(inventario));
       actualizarUI();
 
-      // Petición con identificador exacto de Serial y Hostname
       const queryParams = new URLSearchParams({
         action: 'update',
+        rowIndex: rowIndex,
         Hostname: hostname,
         Numero_Serie_BIOS: serialBios,
         Asset_Tag_QR_Foto: asset,
@@ -788,14 +786,13 @@
         const resp = await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
         const resultado = await resp.json();
         if (resultado.status === "success") {
-          mostrarToast(`Guardado en fila ${resultado.row} de Sheets`, "success");
+          mostrarToast(`Guardado en Sheets (Fila ${resultado.row})`, "success");
         } else {
-          mostrarToast("Guardado local.", "error");
+          mostrarToast("Guardado localmente.", "error");
         }
       } catch (err) {
-        const img = new Image();
-        img.src = urlDestino;
-        mostrarToast("Cambios enviados a Google Sheets", "success");
+        console.error("Error al actualizar Sheets:", err);
+        mostrarToast("Cambios enviados a Sheets", "success");
       }
 
       btn.innerHTML = '<span>Guardar en Sheets</span>';
@@ -848,8 +845,6 @@
         await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
         mostrarToast("Dispositivo agregado a Sheets", "success");
       } catch (err) {
-        const img = new Image();
-        img.src = urlDestino;
         mostrarToast("Dispositivo enviado a Sheets", "success");
       }
 
@@ -862,6 +857,7 @@
       const item = inventario[index];
       const host = item.Hostname || "Sin Hostname";
       const serial = item.Numero_Serie_BIOS || "";
+      const rowIndex = item._rowIndex || "";
       
       const confirmar = confirm(`¿Estás seguro de dar de baja y eliminar el dispositivo "${host}"?\n\nEsta acción eliminará la fila directamente de Google Sheets.`);
       if (!confirmar) return;
@@ -872,6 +868,7 @@
 
       const queryParams = new URLSearchParams({
         action: 'delete',
+        rowIndex: rowIndex,
         Hostname: item.Hostname || "",
         Numero_Serie_BIOS: serial,
         Asset_Tag_QR_Foto: item.Asset_Tag_QR_Foto || ""
@@ -883,13 +880,10 @@
         await fetch(urlDestino, { method: 'GET', redirect: 'follow' });
         mostrarToast(`Dispositivo "${host}" eliminado de Sheets`, "success");
       } catch (err) {
-        const img = new Image();
-        img.src = urlDestino;
         mostrarToast(`Dispositivo "${host}" eliminado`, "success");
       }
     }
 
-    // GESTIÓN DEL MODAL DE ESCÁNER (OCR + QR)
     function abrirEscanerModal() {
       document.getElementById('scannerModal').classList.remove('hidden');
       cambiarModoEscaneo('ocr');
@@ -1050,18 +1044,24 @@
       setTimeout(() => toast.classList.add('hidden'), 3500);
     }
 
+    // EXPORTACIÓN DE CSV / EXCEL
     function exportarCSV() {
-      if (inventario.length === 0) {
-        alert("No hay registros para exportar.");
+      if (!inventario || inventario.length === 0) {
+        alert("No hay registros disponibles para exportar.");
         return;
       }
+
+      // Filtrar campos internos que empiezan por '_'
+      const keysDisponibles = Object.keys(inventario[0]).filter(k => !k.startsWith('_'));
+      const columnas = keysDisponibles.length > 0 ? keysDisponibles : CABECERAS_ESTANDAR;
+
       let lineas = [];
-      lineas.push(CABECERAS.map(c => `"${c}"`).join(';'));
+      lineas.push(columnas.map(c => `"${c}"`).join(';'));
 
       inventario.forEach(item => {
-        let fila = CABECERAS.map(key => {
-          let val = item[key] || "";
-          return `"${String(val).replace(/"/g, '""')}"`;
+        let fila = columnas.map(key => {
+          let val = item[key] !== undefined && item[key] !== null ? String(item[key]) : "";
+          return `"${val.replace(/"/g, '""')}"`;
         });
         lineas.push(fila.join(';'));
       });
@@ -1070,7 +1070,7 @@
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", "INVENTARIO_TI_NUBE.csv");
+      link.setAttribute("download", `INVENTARIO_TI_BUAP_${new Date().toISOString().substring(0, 10)}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
